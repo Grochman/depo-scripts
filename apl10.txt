@@ -1,0 +1,3 @@
+resnet152 - 126, 160 interations, 45s - 10s rampup
+vgg16 - 126, 230 iterations, 82s - 10s rampup
+hf_Bert - 126, 25 iterations - 87s - 19s rampup

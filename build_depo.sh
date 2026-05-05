@@ -85,6 +85,23 @@ if [ ! -d "split" ]; then
     git clone https://projects.task.gda.pl/akrz/split.git
 fi
 cd split
+
+# Apply compatibility patches:
+#   - PCM: switch from opcm/pcm@202107 (Makefile-based) to intel/pcm@202604 (CMake-based)
+#   - injection_2.cpp: add cuLaunchKernelEx callbacks for Ada Lovelace / modern PyTorch
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if git apply --check "$SCRIPT_DIR/split.patch" 2>/dev/null; then
+    git apply "$SCRIPT_DIR/split.patch"
+    echo "Applied split.patch successfully."
+else
+    echo "split.patch already applied or not applicable, skipping."
+fi
+
+# Build injection library for GPU kernel counting (must happen before DEPO is run)
+cd ~/repos/split/profiling_injection
+./build.sh
+cd ~/repos/split
+
 mkdir -p build && cd build
 rm -f CMakeCache.txt # Clean start
 
@@ -98,5 +115,5 @@ make -j$(nproc)
 echo "------------------------------------------------"
 echo "Build Complete! Binaries are in ~/repos/split/build/apps"
 
-ln -s ~/repos/split/build/apps/DEPO/DEPO ~/local/bin/DEPO
+ln -sf ~/repos/split/build/apps/DEPO/DEPO ~/local/bin/DEPO
 echo "Make sure to run 'source ~/.bashrc' if you haven't already."

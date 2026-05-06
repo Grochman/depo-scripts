@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Clean exit on Ctrl+C — also kill any running sudo DEPO child
+trap 'echo "Interrupted. Stopping..."; sudo pkill -f DEPO 2>/dev/null; exit 1' INT TERM
+
 # --- CONFIGURATION ---
 # Note: 100ms removed - minimum valid msTestPhasePeriod is 200ms
 SELECTED_WINDOWS=${WINDOW_FILTER:-"200 400 800 1600 3200 6400"}
@@ -18,7 +21,14 @@ TEMP_WORKLOAD="$USER_HOME/depo-scripts/current_workload.sh"
 CACHE_FLAGS="-v $USER_HOME/.torch_cache/pip:/root/.cache/pip \
              -v $USER_HOME/.torch_cache/torch:/root/.cache/torch \
              -v $USER_HOME/.torch_cache/inductor:/home_cache/inductor \
-             -e TORCHINDUCTOR_CACHE_DIR=/home_cache/inductor"
+             -v $REPO_DIR/profiling_injection:/injection \
+             -v $REPO_DIR:/kernelcount \
+             -v /usr/local/cuda-13.0/targets/x86_64-linux/lib:/cuda13lib:ro \
+             -e TORCHINDUCTOR_CACHE_DIR=/home_cache/inductor \
+             -e CUDA_INJECTION64_PATH=/injection/libinjection_2.so \
+             -e INJECTION_KERNEL_COUNT=1 \
+             -e LD_LIBRARY_PATH=/cuda13lib:/usr/local/cuda/lib64 \
+             -w /kernelcount"
 
 # Ensure directories exist
 mkdir -p "$USER_HOME/.torch_cache/pip" "$USER_HOME/.torch_cache/torch" "$USER_HOME/.torch_cache/inductor"
@@ -45,22 +55,22 @@ generate_workload_script() {
     local m1=$1 m2=$2 m3=$3
     
     # Get params from apl10.txt specifications (per model, not per position)
-    case $m1 in "resnet152") p1="--it=160 --bs=126" ;; "vgg16") p1="--it=230 --bs=126" ;; "hf_Bert") p1="--it=25 --bs=126" ;; esac
-    case $m2 in "resnet152") p2="--it=160 --bs=126" ;; "vgg16") p2="--it=230 --bs=126" ;; "hf_Bert") p2="--it=25 --bs=126" ;; esac
-    case $m3 in "resnet152") p3="--it=160 --bs=126" ;; "vgg16") p3="--it=230 --bs=126" ;; "hf_Bert") p3="--it=25 --bs=126" ;; esac
+    case $m1 in "resnet152") p1="--it=10 --bs=32" ;; "vgg16") p1="--it=100 --bs=64" ;; "hf_Bert") p1="--it=100 --bs=16" ;; esac
+    case $m2 in "resnet152") p2="--it=10 --bs=32" ;; "vgg16") p2="--it=100 --bs=64" ;; "hf_Bert") p2="--it=100 --bs=16" ;; esac
+    case $m3 in "resnet152") p3="--it=10 --bs=32" ;; "vgg16") p3="--it=100 --bs=64" ;; "hf_Bert") p3="--it=100 --bs=16" ;; esac
 
     cat << EOF > "$TEMP_WORKLOAD"
 #!/bin/bash
 cd "$TORCHBENCH_DIR" || exit 1
 
 echo "Starting Segment 1: $m1"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 run.py $m1 -d=cuda -t=train $p1 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 /srv/benchmark/run.py $m1 -d=cuda -t=train $p1 --precision=fp32"
 
 echo "Starting Segment 2: $m2"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 run.py $m2 -d=cuda -t=train $p2 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 /srv/benchmark/run.py $m2 -d=cuda -t=train $p2 --precision=fp32"
 
 echo "Starting Segment 3: $m3"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 run.py $m3 -d=cuda -t=train $p3 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 /srv/benchmark/run.py $m3 -d=cuda -t=train $p3 --precision=fp32"
 EOF
     chmod +x "$TEMP_WORKLOAD"
 }

@@ -115,5 +115,12 @@ make -j$(nproc)
 echo "------------------------------------------------"
 echo "Build Complete! Binaries are in ~/repos/split/build/apps"
 
+# Set up local (non-NFS) kernels_count to avoid NFS I/O overhead from the injection library.
+# The injection writes this file on every GPU kernel launch; using /tmp keeps it on fast local storage.
+mkdir -p /tmp/depo_kernelcount
+echo 0 > /tmp/depo_kernelcount/kernels_count
+ln -sf /tmp/depo_kernelcount/kernels_count ~/repos/split/kernels_count
+echo "kernels_count symlink: ~/repos/split/kernels_count -> /tmp/depo_kernelcount/kernels_count"
+
 ln -sf ~/repos/split/build/apps/DEPO/DEPO ~/local/bin/DEPO
 echo "Make sure to run 'source ~/.bashrc' if you haven't already."

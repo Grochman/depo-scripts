@@ -22,7 +22,7 @@ CACHE_FLAGS="-v $USER_HOME/.torch_cache/pip:/root/.cache/pip \
              -v $USER_HOME/.torch_cache/torch:/root/.cache/torch \
              -v $USER_HOME/.torch_cache/inductor:/home_cache/inductor \
              -v $REPO_DIR/profiling_injection:/injection \
-             -v $REPO_DIR:/kernelcount \
+             -v /tmp/depo_kernelcount:/kernelcount \
              -v /usr/local/cuda-13.0/targets/x86_64-linux/lib:/cuda13lib:ro \
              -e TORCHINDUCTOR_CACHE_DIR=/home_cache/inductor \
              -e CUDA_INJECTION64_PATH=/injection/libinjection_2.so \
@@ -55,9 +55,9 @@ generate_workload_script() {
     local m1=$1 m2=$2 m3=$3
     
     # Get params from apl10.txt specifications (per model, not per position)
-    case $m1 in "resnet152") p1="--it=10 --bs=32" ;; "vgg16") p1="--it=100 --bs=64" ;; "hf_Bert") p1="--it=100 --bs=16" ;; esac
-    case $m2 in "resnet152") p2="--it=10 --bs=32" ;; "vgg16") p2="--it=100 --bs=64" ;; "hf_Bert") p2="--it=100 --bs=16" ;; esac
-    case $m3 in "resnet152") p3="--it=10 --bs=32" ;; "vgg16") p3="--it=100 --bs=64" ;; "hf_Bert") p3="--it=100 --bs=16" ;; esac
+    case $m1 in "resnet152") p1="--it=50 --bs=32" ;; "vgg16") p1="--it=500 --bs=64" ;; "hf_Bert") p1="--it=400 --bs=16" ;; esac
+    case $m2 in "resnet152") p2="--it=50 --bs=32" ;; "vgg16") p2="--it=500 --bs=64" ;; "hf_Bert") p2="--it=400 --bs=16" ;; esac
+    case $m3 in "resnet152") p3="--it=50 --bs=32" ;; "vgg16") p3="--it=500 --bs=64" ;; "hf_Bert") p3="--it=400 --bs=16" ;; esac
 
     cat << EOF > "$TEMP_WORKLOAD"
 #!/bin/bash
@@ -80,7 +80,6 @@ EOF
 # ==============================================================================
 
 cd "$REPO_DIR" || exit 1
-MODELS=("resnet152" "vgg16" "hf_Bert")
 
 for W in $SELECTED_WINDOWS; do
     for T in $SELECTED_PERIODS; do
@@ -88,37 +87,34 @@ for W in $SELECTED_WINDOWS; do
         echo ">>> STARTING BATCH: Window=${W}ms, TuningPeriod=${T}s"
         update_config "$W" "$T"
         
-        for m1 in "${MODELS[@]}"; do
-            for m2 in "${MODELS[@]}"; do
-                for m3 in "${MODELS[@]}"; do
-                    
-                    WORKLOAD_NAME="${m1}_${m2}_${m3}"
-                    FINAL_NAME="res_W${W}_T${T}_${WORKLOAD_NAME}"
-                    FINAL_DEST="$REPO_DIR/$FINAL_NAME"
-                    
-                    if [ -d "$FINAL_DEST" ]; then
-                        echo "Skipping $WORKLOAD_NAME (already exists)"
-                        continue
-                    fi
-                    
-                    echo "--- Running Workload: $WORKLOAD_NAME"
-                    generate_workload_script "$m1" "$m2" "$m3"
-                    
-                    # Run DEPO as root
-                    sudo "$DEPO_BIN" "$TEMP_WORKLOAD"
-                    
-                    # Identify and move result
-                    NEW_FOLDER=$(ls -td "$REPO_DIR"/gpu_experiment_* 2>/dev/null | head -1)
-                    
-                    if [ -n "$NEW_FOLDER" ]; then
-                        # Rename in place within REPO_DIR — matches run_single.sh approach
-                        mv "$NEW_FOLDER" "$FINAL_DEST"
-                        cp "$CONFIG_FILE" "$FINAL_DEST/config_used.yaml"
-                    else
-                        echo "ERROR: DEPO did not produce a folder"
-                    fi
-                done
-            done
-        done
+        m1="vgg16"
+        m2="resnet152"
+        m3="hf_Bert"
+        
+        WORKLOAD_NAME="${m1}_${m2}_${m3}"
+        FINAL_NAME="res_W${W}_T${T}_${WORKLOAD_NAME}"
+        FINAL_DEST="$REPO_DIR/$FINAL_NAME"
+        
+        if [ -d "$FINAL_DEST" ]; then
+            echo "Skipping $WORKLOAD_NAME (already exists)"
+            continue
+        fi
+        
+        echo "--- Running Workload: $WORKLOAD_NAME"
+        generate_workload_script "$m1" "$m2" "$m3"
+        
+        # Run DEPO as root
+        sudo "$DEPO_BIN" "$TEMP_WORKLOAD"
+        
+        # Identify and move result
+        NEW_FOLDER=$(ls -td "$REPO_DIR"/gpu_experiment_* 2>/dev/null | head -1)
+        
+        if [ -n "$NEW_FOLDER" ]; then
+            # Rename in place within REPO_DIR — matches run_single.sh approach
+            mv "$NEW_FOLDER" "$FINAL_DEST"
+            cp "$CONFIG_FILE" "$FINAL_DEST/config_used.yaml"
+        else
+            echo "ERROR: DEPO did not produce a folder"
+        fi
     done
 done

@@ -43,32 +43,4 @@ index bf3b0d9..bad2288 100644
  
 +
  include_directories(${CMAKE_CURRENT_BINARY_DIR}/pcm-src)
-diff --git a/profiling_injection/injection_2.cpp b/profiling_injection/injection_2.cpp
-index 0cbc33c..1668fd0 100644
---- a/profiling_injection/injection_2.cpp
-+++ b/profiling_injection/injection_2.cpp
-@@ -331,8 +331,12 @@ ProfilerCallbackHandler(
-     CUptiResult res;
-     if (domain == CUPTI_CB_DOMAIN_DRIVER_API)
-     {
--        // For a driver call to launch a kernel:
--        if (callbackId == CUPTI_DRIVER_TRACE_CBID_cuLaunchKernel)
-+        // For a driver call to launch a kernel (covers cuLaunchKernel, cuLaunchKernelEx,
-+        // and their _ptsz variants used on Ada Lovelace / modern PyTorch):
-+        if (callbackId == CUPTI_DRIVER_TRACE_CBID_cuLaunchKernel ||
-+            callbackId == CUPTI_DRIVER_TRACE_CBID_cuLaunchKernel_ptsz ||
-+            callbackId == CUPTI_DRIVER_TRACE_CBID_cuLaunchKernelEx ||
-+            callbackId == CUPTI_DRIVER_TRACE_CBID_cuLaunchKernelEx_ptsz)
-         {
-             CUpti_CallbackData const *pData = static_cast<CUpti_CallbackData const *>(pCallbackData);
-             CUcontext ctx = pData->context;
-@@ -465,6 +469,9 @@ RegisterCallbacks()
-     CUPTI_API_CALL(cuptiSubscribe(&subscriber, (CUpti_CallbackFunc)ProfilerCallbackHandler, NULL));
-     // Runtime callback domain is needed for kernel launch callbacks
-     CUPTI_API_CALL(cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_DRIVER_API, CUPTI_DRIVER_TRACE_CBID_cuLaunchKernel));
-+    CUPTI_API_CALL(cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_DRIVER_API, CUPTI_DRIVER_TRACE_CBID_cuLaunchKernel_ptsz));
-+    CUPTI_API_CALL(cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_DRIVER_API, CUPTI_DRIVER_TRACE_CBID_cuLaunchKernelEx));
-+    CUPTI_API_CALL(cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_DRIVER_API, CUPTI_DRIVER_TRACE_CBID_cuLaunchKernelEx_ptsz));
-     // Resource callback domain is needed for context creation callbacks
-     CUPTI_API_CALL(cuptiEnableCallback(1, subscriber, CUPTI_CB_DOMAIN_RESOURCE, CUPTI_CBID_RESOURCE_CONTEXT_CREATED));
  

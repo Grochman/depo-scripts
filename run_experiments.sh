@@ -56,9 +56,9 @@ generate_workload_script() {
     local m1=$1 m2=$2 m3=$3
     
     # Get params from apl10.txt specifications (per model, not per position)
-    case $m1 in "resnet152") p1="--it=600 --bs=32" ;; "vgg16") p1="--it=300 --bs=64" ;; "hf_Bert") p1="--it=450 --bs=16" ;; esac
-    case $m2 in "resnet152") p2="--it=600 --bs=32" ;; "vgg16") p2="--it=300 --bs=64" ;; "hf_Bert") p2="--it=450 --bs=16" ;; esac
-    case $m3 in "resnet152") p3="--it=600 --bs=32" ;; "vgg16") p3="--it=300 --bs=64" ;; "hf_Bert") p3="--it=450 --bs=16" ;; esac
+    case $m1 in "resnet152") p1="--it=800 --bs=32" ;; "opacus_cifar10") p1="--it=4000 --bs=64" ;; "hf_Bert") p1="--it=600 --bs=16" ;; esac
+    case $m2 in "resnet152") p2="--it=800 --bs=32" ;; "opacus_cifar10") p2="--it=4000 --bs=64" ;; "hf_Bert") p2="--it=600 --bs=16" ;; esac
+    case $m3 in "resnet152") p3="--it=800 --bs=32" ;; "opacus_cifar10") p3="--it=4000 --bs=64" ;; "hf_Bert") p3="--it=600 --bs=16" ;; esac
 
     cat << EOF > "$TEMP_WORKLOAD"
 #!/bin/bash
@@ -87,43 +87,53 @@ for W in $SELECTED_WINDOWS; do
         
         echo ">>> STARTING BATCH: Window=${W}ms, TuningPeriod=${T}s"
         update_config "$W" "$T"
-        
-        m1="vgg16"
-        m2="resnet152"
-        m3="hf_Bert"
-        
-        WORKLOAD_NAME="${m1}_${m2}_${m3}"
-        FINAL_NAME="res_W${W}_T${T}_${WORKLOAD_NAME}"
-        FINAL_DEST="$REPO_DIR/$FINAL_NAME"
-        
-        if [ -d "$FINAL_DEST" ]; then
-            echo "Skipping $WORKLOAD_NAME (already exists)"
-            continue
-        fi
-        
-        echo "--- Running Workload: $WORKLOAD_NAME"
-        generate_workload_script "$m1" "$m2" "$m3"
-        
-        # Run DEPO as root
-        sudo "$DEPO_BIN" "$TEMP_WORKLOAD"
-        
-        # Log GPU state after each run
-        TS=$(date '+%Y-%m-%d %H:%M:%S')
-        echo "=== [$TS] W=${W} T=${T} ${WORKLOAD_NAME} ==" >> "$NVIDIA_SMI_LOG"
-        sudo nvidia-smi >> "$NVIDIA_SMI_LOG" 2>&1
-        echo "" >> "$NVIDIA_SMI_LOG"
-        
-        # Identify and move result
-        NEW_FOLDER=$(ls -td "$REPO_DIR"/gpu_experiment_* 2>/dev/null | head -1)
-        
-        if [ -n "$NEW_FOLDER" ]; then
-            # Rename in place within REPO_DIR — matches run_single.sh approach
-            mv "$NEW_FOLDER" "$FINAL_DEST"
-            cp "$CONFIG_FILE" "$FINAL_DEST/config_used.yaml"
-            # Also copy the nvidia-smi snapshot into the result folder
-            cp "$NVIDIA_SMI_LOG" "$FINAL_DEST/nvidia_smi_snapshot.txt"
-        else
-            echo "ERROR: DEPO did not produce a folder"
-        fi
+
+        MODELS=("resnet152" "opacus_cifar10" "hf_Bert")
+
+        for i in 0 1 2; do
+            for j in 0 1 2; do
+                [[ $j -eq $i ]] && continue
+                for k in 0 1 2; do
+                    [[ $k -eq $i || $k -eq $j ]] && continue
+
+                    m1="${MODELS[$i]}"
+                    m2="${MODELS[$j]}"
+                    m3="${MODELS[$k]}"
+
+                    WORKLOAD_NAME="${m1}_${m2}_${m3}"
+                    FINAL_NAME="res_W${W}_T${T}_${WORKLOAD_NAME}"
+                    FINAL_DEST="$REPO_DIR/$FINAL_NAME"
+
+                    if [ -d "$FINAL_DEST" ]; then
+                        echo "Skipping $WORKLOAD_NAME (already exists)"
+                        continue
+                    fi
+
+                    echo "--- Running Workload: $WORKLOAD_NAME"
+                    generate_workload_script "$m1" "$m2" "$m3"
+
+                    # Run DEPO as root
+                    sudo "$DEPO_BIN" "$TEMP_WORKLOAD"
+
+                    # Log GPU state after each run
+                    TS=$(date '+%Y-%m-%d %H:%M:%S')
+                    echo "=== [$TS] W=${W} T=${T} ${WORKLOAD_NAME} ==" >> "$NVIDIA_SMI_LOG"
+                    sudo nvidia-smi >> "$NVIDIA_SMI_LOG" 2>&1
+                    echo "" >> "$NVIDIA_SMI_LOG"
+
+                    # Identify and move result
+                    NEW_FOLDER=$(ls -td "$REPO_DIR"/gpu_experiment_* 2>/dev/null | head -1)
+
+                    if [ -n "$NEW_FOLDER" ]; then
+                        mv "$NEW_FOLDER" "$FINAL_DEST"
+                        cp "$CONFIG_FILE" "$FINAL_DEST/config_used.yaml"
+                        cp "$NVIDIA_SMI_LOG" "$FINAL_DEST/nvidia_smi_snapshot.txt"
+                    else
+                        echo "ERROR: DEPO did not produce a folder"
+                    fi
+                done
+            done
+        done
     done
 done
+

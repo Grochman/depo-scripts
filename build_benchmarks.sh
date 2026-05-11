@@ -12,7 +12,7 @@ fi
 cd torchbench-caise
 
 docker build \
-    --build-arg MODELS="resnet152 vgg16 hf_Bert" \
+    --build-arg MODELS="resnet152 vgg16 hf_Bert opacus_cifar10" \
     --tag torchbench-suite:1.0.1 \
     --file ./docker/torchbench-caise.dockerfile . \
     2>&1 | tee docker-build.log

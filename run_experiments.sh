@@ -16,6 +16,7 @@ CONFIG_FILE="$REPO_DIR/config.yaml"
 RESULTS_BASE="$REPO_DIR/results_experiment_$(date +%Y%m%d_%H%M)"
 DEPO_BIN="$USER_HOME/local/bin/DEPO"
 TEMP_WORKLOAD="$USER_HOME/depo-scripts/current_workload.sh"
+NVIDIA_SMI_LOG="$REPO_DIR/nvidia_smi_run_log.txt"
 
 # Docker Cache Configuration
 CACHE_FLAGS="-v $USER_HOME/.torch_cache/pip:/root/.cache/pip \
@@ -55,9 +56,9 @@ generate_workload_script() {
     local m1=$1 m2=$2 m3=$3
     
     # Get params from apl10.txt specifications (per model, not per position)
-    case $m1 in "resnet152") p1="--it=50 --bs=32" ;; "vgg16") p1="--it=500 --bs=64" ;; "hf_Bert") p1="--it=400 --bs=16" ;; esac
-    case $m2 in "resnet152") p2="--it=50 --bs=32" ;; "vgg16") p2="--it=500 --bs=64" ;; "hf_Bert") p2="--it=400 --bs=16" ;; esac
-    case $m3 in "resnet152") p3="--it=50 --bs=32" ;; "vgg16") p3="--it=500 --bs=64" ;; "hf_Bert") p3="--it=400 --bs=16" ;; esac
+    case $m1 in "resnet152") p1="--it=600 --bs=32" ;; "vgg16") p1="--it=300 --bs=64" ;; "hf_Bert") p1="--it=450 --bs=16" ;; esac
+    case $m2 in "resnet152") p2="--it=600 --bs=32" ;; "vgg16") p2="--it=300 --bs=64" ;; "hf_Bert") p2="--it=450 --bs=16" ;; esac
+    case $m3 in "resnet152") p3="--it=600 --bs=32" ;; "vgg16") p3="--it=300 --bs=64" ;; "hf_Bert") p3="--it=450 --bs=16" ;; esac
 
     cat << EOF > "$TEMP_WORKLOAD"
 #!/bin/bash
@@ -106,6 +107,12 @@ for W in $SELECTED_WINDOWS; do
         # Run DEPO as root
         sudo "$DEPO_BIN" "$TEMP_WORKLOAD"
         
+        # Log GPU state after each run
+        TS=$(date '+%Y-%m-%d %H:%M:%S')
+        echo "=== [$TS] W=${W} T=${T} ${WORKLOAD_NAME} ==" >> "$NVIDIA_SMI_LOG"
+        sudo nvidia-smi >> "$NVIDIA_SMI_LOG" 2>&1
+        echo "" >> "$NVIDIA_SMI_LOG"
+        
         # Identify and move result
         NEW_FOLDER=$(ls -td "$REPO_DIR"/gpu_experiment_* 2>/dev/null | head -1)
         
@@ -113,6 +120,8 @@ for W in $SELECTED_WINDOWS; do
             # Rename in place within REPO_DIR — matches run_single.sh approach
             mv "$NEW_FOLDER" "$FINAL_DEST"
             cp "$CONFIG_FILE" "$FINAL_DEST/config_used.yaml"
+            # Also copy the nvidia-smi snapshot into the result folder
+            cp "$NVIDIA_SMI_LOG" "$FINAL_DEST/nvidia_smi_snapshot.txt"
         else
             echo "ERROR: DEPO did not produce a folder"
         fi

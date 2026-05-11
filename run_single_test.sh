@@ -13,6 +13,6 @@ docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" \
     -e INJECTION_KERNEL_COUNT=1 \
     -e LD_LIBRARY_PATH=/cuda13lib:/usr/local/cuda/lib64 \
     -w /kernelcount \
-    torchbench-suite:1.0.1 -c "python3 /srv/benchmark/run.py hf_Bert -d=cuda -t=train --it=100 --bs=16 --precision=fp32"
+    torchbench-suite:1.0.1 -c "python3 /srv/benchmark/run.py hf_Bert -d=cuda -t=train --it=200 --bs=16 --precision=fp32"
 
 # ./minibenchmarks/openmp/fft 1024 300

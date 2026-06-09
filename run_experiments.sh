@@ -5,8 +5,8 @@ trap 'echo "Interrupted. Stopping..."; sudo pkill -f DEPO 2>/dev/null; exit 1' I
 
 # --- CONFIGURATION ---
 # Note: 100ms removed - minimum valid msTestPhasePeriod is 200ms
-SELECTED_WINDOWS=${WINDOW_FILTER:-"200 400 800 1600 3200 6400"}
-SELECTED_PERIODS=${PERIOD_FILTER:-"10 20 40 80"}
+SELECTED_WINDOWS=${WINDOW_FILTER:-"200 400 800 1600 3200 6400 12800"}
+SELECTED_PERIODS=${PERIOD_FILTER:-"10 20 40 80 160"}
 
 # Absolute paths to avoid root/user confusion
 USER_HOME="/home/macierz/s193246"
@@ -19,16 +19,15 @@ TEMP_WORKLOAD="$USER_HOME/depo-scripts/current_workload.sh"
 NVIDIA_SMI_LOG="$REPO_DIR/nvidia_smi_run_log.txt"
 
 # Docker Cache Configuration
-CACHE_FLAGS="-v $USER_HOME/.torch_cache/pip:/root/.cache/pip \
+CACHE_FLAGS="--cap-add=SYS_ADMIN \
+             -v $USER_HOME/.torch_cache/pip:/root/.cache/pip \
              -v $USER_HOME/.torch_cache/torch:/root/.cache/torch \
              -v $USER_HOME/.torch_cache/inductor:/home_cache/inductor \
              -v $REPO_DIR/profiling_injection:/injection \
              -v /tmp/depo_kernelcount:/kernelcount \
-             -v /usr/local/cuda-13.0/targets/x86_64-linux/lib:/cuda13lib:ro \
              -e TORCHINDUCTOR_CACHE_DIR=/home_cache/inductor \
              -e CUDA_INJECTION64_PATH=/injection/libinjection_2.so \
              -e INJECTION_KERNEL_COUNT=1 \
-             -e LD_LIBRARY_PATH=/cuda13lib:/usr/local/cuda/lib64 \
              -w /kernelcount"
 
 # Ensure directories exist
@@ -56,22 +55,24 @@ generate_workload_script() {
     local m1=$1 m2=$2 m3=$3
     
     # Get params from apl10.txt specifications (per model, not per position)
-    case $m1 in "resnet152") p1="--it=800 --bs=32" ;; "opacus_cifar10") p1="--it=4000 --bs=64" ;; "hf_Bert") p1="--it=600 --bs=16" ;; esac
-    case $m2 in "resnet152") p2="--it=800 --bs=32" ;; "opacus_cifar10") p2="--it=4000 --bs=64" ;; "hf_Bert") p2="--it=600 --bs=16" ;; esac
-    case $m3 in "resnet152") p3="--it=800 --bs=32" ;; "opacus_cifar10") p3="--it=4000 --bs=64" ;; "hf_Bert") p3="--it=600 --bs=16" ;; esac
+    case $m1 in "resnet152") p1="--it=2500 --bs=32" ;; "opacus_cifar10") p1="--it=1700 --bs=512" ;; "hf_Bert") p1="--it=1000 --bs=16" ;; esac
+    case $m2 in "resnet152") p2="--it=2500 --bs=32" ;; "opacus_cifar10") p2="--it=1700 --bs=512" ;; "hf_Bert") p2="--it=1000 --bs=16" ;; esac
+    case $m3 in "resnet152") p3="--it=2500 --bs=32" ;; "opacus_cifar10") p3="--it=1700 --bs=512" ;; "hf_Bert") p3="--it=1000 --bs=16" ;; esac
+
+    local wrapper="CUPTI_DIR=\$(find /srv/benchmark/venv/lib /usr/local /usr/lib/x86_64-linux-gnu -name 'libcupti.so*' 2>/dev/null | grep -v 'nsight' | head -n 1 | xargs dirname); mkdir -p /tmp/cuda-libs; ln -sf \$CUPTI_DIR/libcupti.so* /tmp/cuda-libs/; ln -sf \$CUPTI_DIR/libnvperf_host.so* /tmp/cuda-libs/; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.11; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.12; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.13; export LD_LIBRARY_PATH=/tmp/cuda-libs:\$LD_LIBRARY_PATH;"
 
     cat << EOF > "$TEMP_WORKLOAD"
 #!/bin/bash
 cd "$TORCHBENCH_DIR" || exit 1
 
 echo "Starting Segment 1: $m1"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 /srv/benchmark/run.py $m1 -d=cuda -t=train $p1 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "$wrapper python3 /srv/benchmark/run.py $m1 -d=cuda -t=train $p1 --precision=fp32"
 
 echo "Starting Segment 2: $m2"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 /srv/benchmark/run.py $m2 -d=cuda -t=train $p2 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "$wrapper python3 /srv/benchmark/run.py $m2 -d=cuda -t=train $p2 --precision=fp32"
 
 echo "Starting Segment 3: $m3"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "python3 /srv/benchmark/run.py $m3 -d=cuda -t=train $p3 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "$wrapper python3 /srv/benchmark/run.py $m3 -d=cuda -t=train $p3 --precision=fp32"
 EOF
     chmod +x "$TEMP_WORKLOAD"
 }

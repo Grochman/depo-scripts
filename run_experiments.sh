@@ -54,25 +54,24 @@ update_config() {
 generate_workload_script() {
     local m1=$1 m2=$2 m3=$3
     
-    # Get params from apl10.txt specifications (per model, not per position)
     case $m1 in "resnet152") p1="--it=2500 --bs=32" ;; "opacus_cifar10") p1="--it=1700 --bs=512" ;; "hf_Bert") p1="--it=1000 --bs=16" ;; esac
     case $m2 in "resnet152") p2="--it=2500 --bs=32" ;; "opacus_cifar10") p2="--it=1700 --bs=512" ;; "hf_Bert") p2="--it=1000 --bs=16" ;; esac
     case $m3 in "resnet152") p3="--it=2500 --bs=32" ;; "opacus_cifar10") p3="--it=1700 --bs=512" ;; "hf_Bert") p3="--it=1000 --bs=16" ;; esac
 
-    local wrapper="CUPTI_DIR=\$(find /srv/benchmark/venv/lib /usr/local /usr/lib/x86_64-linux-gnu -name 'libcupti.so*' 2>/dev/null | grep -v 'nsight' | head -n 1 | xargs dirname); mkdir -p /tmp/cuda-libs; ln -sf \$CUPTI_DIR/libcupti.so* /tmp/cuda-libs/; ln -sf \$CUPTI_DIR/libnvperf_host.so* /tmp/cuda-libs/; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.11; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.12; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.13; export LD_LIBRARY_PATH=/tmp/cuda-libs:\$LD_LIBRARY_PATH;"
+    local wrapper="CUPTI_DIR=\$(find /srv/benchmark/venv/lib /usr/local /usr/lib/x86_64-linux-gnu -name \"libcupti.so*\" 2>/dev/null | grep -v \"nsight\" | head -n 1 | xargs dirname); mkdir -p /tmp/cuda-libs; ln -sf \$CUPTI_DIR/libcupti.so* /tmp/cuda-libs/; ln -sf \$CUPTI_DIR/libnvperf_host.so* /tmp/cuda-libs/; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.11; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.12; ln -sf libcupti.so /tmp/cuda-libs/libcupti.so.13; export LD_LIBRARY_PATH=/tmp/cuda-libs:\$LD_LIBRARY_PATH;"
 
     cat << EOF > "$TEMP_WORKLOAD"
 #!/bin/bash
 cd "$TORCHBENCH_DIR" || exit 1
 
 echo "Starting Segment 1: $m1"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "$wrapper python3 /srv/benchmark/run.py $m1 -d=cuda -t=train $p1 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c '$wrapper python3 /srv/benchmark/run.py $m1 -d=cuda -t=train $p1 --precision=fp32'
 
 echo "Starting Segment 2: $m2"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "$wrapper python3 /srv/benchmark/run.py $m2 -d=cuda -t=train $p2 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c '$wrapper python3 /srv/benchmark/run.py $m2 -d=cuda -t=train $p2 --precision=fp32'
 
 echo "Starting Segment 3: $m3"
-docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c "$wrapper python3 /srv/benchmark/run.py $m3 -d=cuda -t=train $p3 --precision=fp32"
+docker run --rm --ipc host --gpus all --entrypoint "/bin/bash" $CACHE_FLAGS torchbench-suite:1.0.1 -c '$wrapper python3 /srv/benchmark/run.py $m3 -d=cuda -t=train $p3 --precision=fp32'
 EOF
     chmod +x "$TEMP_WORKLOAD"
 }
@@ -106,8 +105,8 @@ for W in $SELECTED_WINDOWS; do
                     FINAL_DEST="$REPO_DIR/$FINAL_NAME"
 
                     if [ -d "$FINAL_DEST" ]; then
-                        echo "Skipping $WORKLOAD_NAME (already exists)"
-                        continue
+                        echo "Overwriting existing directory $FINAL_NAME"
+                        rm -rf "$FINAL_DEST"
                     fi
 
                     echo "--- Running Workload: $WORKLOAD_NAME"

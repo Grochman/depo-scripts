@@ -6,7 +6,7 @@ trap 'echo "Interrupted. Stopping..."; sudo pkill -f DEPO 2>/dev/null; exit 1' I
 # --- CONFIGURATION ---
 NUM_RUNS=1
 
-USER_HOME="/home/macierz/s193246"
+USER_HOME="${HOME}"
 REPO_DIR="$USER_HOME/repos/split"
 TORCHBENCH_DIR="$USER_HOME/repos/torchbench-caise"
 DEPO_BIN="$USER_HOME/local/bin/DEPO"

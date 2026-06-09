@@ -1,3 +1,7 @@
 #!/bin/bash
-export LD_LIBRARY_PATH="/home/macierz/s193246/local/lib"
-exec "/home/macierz/s193246/repos/split/build/apps/DEPO/DEPO" --gss --edp --gpu 0 "$@" 2>&1
+USER_HOME="${HOME}"
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+fi
+export LD_LIBRARY_PATH="$USER_HOME/local/lib"
+exec "$USER_HOME/repos/split/build/apps/DEPO/DEPO" --gss --edp --gpu 0 "$@" 2>&1

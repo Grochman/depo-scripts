@@ -2,7 +2,9 @@
 # kill_depo.sh — Stop all running DEPO instances using a privileged DEPO execution.
 # Works around the lack of general sudo by running kill inside a DEPO workload script.
 
-DEPO_BIN="/home/macierz/s193246/local/bin/DEPO"
+USER_HOME="${HOME}"
+
+DEPO_BIN="$USER_HOME/local/bin/DEPO"
 KILL_SCRIPT="/tmp/_depo_kill_$$.sh"
 
 # Find all running DEPO binary PIDs (exclude ourselves)

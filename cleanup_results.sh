@@ -5,9 +5,11 @@
 # Lists all result folders and deletes selected ones via sudo DEPO.
 # ==============================================================================
 
-REPO_DIR="/home/macierz/s193246/repos/split"
-DEPO_BIN="/home/macierz/s193246/local/bin/DEPO"
-DELETE_SCRIPT="/home/macierz/s193246/depo-scripts/delete_results.sh"
+USER_HOME="${HOME}"
+
+REPO_DIR="$USER_HOME/repos/split"
+DEPO_BIN="$USER_HOME/local/bin/DEPO"
+DELETE_SCRIPT="$USER_HOME/depo-scripts/delete_results.sh"
 
 # Find all result, debug, and raw experiment folders
 mapfile -t FOLDERS < <(ls -dt "$REPO_DIR"/{res_*,debug_*,gpu_experiment_*,cpu_experiment_*} 2>/dev/null)

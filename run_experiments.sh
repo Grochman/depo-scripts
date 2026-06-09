@@ -9,7 +9,7 @@ SELECTED_WINDOWS=${WINDOW_FILTER:-"200 400 800 1600 3200 6400 12800"}
 SELECTED_PERIODS=${PERIOD_FILTER:-"10 20 40 80 160"}
 
 # Absolute paths to avoid root/user confusion
-USER_HOME="/home/macierz/s193246"
+USER_HOME="${HOME}"
 REPO_DIR="$USER_HOME/repos/split"
 TORCHBENCH_DIR="$USER_HOME/repos/torchbench-caise"
 CONFIG_FILE="$REPO_DIR/config.yaml"

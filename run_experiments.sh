@@ -8,6 +8,22 @@ trap 'echo "Interrupted. Stopping..."; sudo pkill -f DEPO 2>/dev/null; exit 1' I
 SELECTED_WINDOWS=${WINDOW_FILTER:-"200 400 800 1600 3200 6400 12800"}
 SELECTED_PERIODS=${PERIOD_FILTER:-"10 20 40 80 160"}
 
+# Check if WINDOW_FILTER and PERIOD_FILTER are passed (via environment variables)
+if [ -n "$WINDOW_FILTER" ] || [ -n "$PERIOD_FILTER" ]; then
+    # Behavior should not change - one iteration over the specified range, standard folder name
+    NUM_RUNS=1
+    MULTI_RUN=false
+else
+    # No WINDOW_FILTER and no PERIOD_FILTER passed
+    # Default to 5 runs, unless specified via NUM_RUNS environment variable
+    NUM_RUNS=${NUM_RUNS:-5}
+    if ! [[ "$NUM_RUNS" =~ ^[0-9]+$ ]]; then
+        echo "Error: NUM_RUNS must be a positive integer."
+        exit 1
+    fi
+    MULTI_RUN=true
+fi
+
 # Absolute paths to avoid root/user confusion
 USER_HOME="${HOME}"
 REPO_DIR="$USER_HOME/repos/split"
@@ -82,55 +98,69 @@ EOF
 
 cd "$REPO_DIR" || exit 1
 
-for W in $SELECTED_WINDOWS; do
-    for T in $SELECTED_PERIODS; do
-        
-        echo ">>> STARTING BATCH: Window=${W}ms, TuningPeriod=${T}s"
-        update_config "$W" "$T"
+for RUN in $(seq 1 "$NUM_RUNS"); do
+    if [ "$MULTI_RUN" = true ]; then
+        echo ">>> STARTING RUN $RUN / $NUM_RUNS"
+    fi
 
-        MODELS=("resnet152" "opacus_cifar10" "hf_Bert")
+    for W in $SELECTED_WINDOWS; do
+        for T in $SELECTED_PERIODS; do
+            
+            echo ">>> STARTING BATCH: Window=${W}ms, TuningPeriod=${T}s"
+            update_config "$W" "$T"
 
-        for i in 0 1 2; do
-            for j in 0 1 2; do
-                [[ $j -eq $i ]] && continue
-                for k in 0 1 2; do
-                    [[ $k -eq $i || $k -eq $j ]] && continue
+            MODELS=("resnet152" "opacus_cifar10" "hf_Bert")
 
-                    m1="${MODELS[$i]}"
-                    m2="${MODELS[$j]}"
-                    m3="${MODELS[$k]}"
+            for i in 0 1 2; do
+                for j in 0 1 2; do
+                    [[ $j -eq $i ]] && continue
+                    for k in 0 1 2; do
+                        [[ $k -eq $i || $k -eq $j ]] && continue
 
-                    WORKLOAD_NAME="${m1}_${m2}_${m3}"
-                    FINAL_NAME="res_W${W}_T${T}_${WORKLOAD_NAME}"
-                    FINAL_DEST="$REPO_DIR/$FINAL_NAME"
+                        m1="${MODELS[$i]}"
+                        m2="${MODELS[$j]}"
+                        m3="${MODELS[$k]}"
 
-                    if [ -d "$FINAL_DEST" ]; then
-                        echo "Overwriting existing directory $FINAL_NAME"
-                        rm -rf "$FINAL_DEST"
-                    fi
+                        WORKLOAD_NAME="${m1}_${m2}_${m3}"
+                        if [ "$MULTI_RUN" = true ]; then
+                            FINAL_NAME="res_W${W}_T${T}_r${RUN}_${WORKLOAD_NAME}"
+                        else
+                            FINAL_NAME="res_W${W}_T${T}_${WORKLOAD_NAME}"
+                        fi
+                        FINAL_DEST="$REPO_DIR/$FINAL_NAME"
 
-                    echo "--- Running Workload: $WORKLOAD_NAME"
-                    generate_workload_script "$m1" "$m2" "$m3"
+                        if [ -d "$FINAL_DEST" ]; then
+                            echo "Overwriting existing directory $FINAL_NAME"
+                            rm -rf "$FINAL_DEST"
+                        fi
 
-                    # Run DEPO as root
-                    sudo "$DEPO_BIN" "$TEMP_WORKLOAD"
+                        echo "--- Running Workload: $WORKLOAD_NAME"
+                        generate_workload_script "$m1" "$m2" "$m3"
 
-                    # Log GPU state after each run
-                    TS=$(date '+%Y-%m-%d %H:%M:%S')
-                    echo "=== [$TS] W=${W} T=${T} ${WORKLOAD_NAME} ==" >> "$NVIDIA_SMI_LOG"
-                    sudo nvidia-smi >> "$NVIDIA_SMI_LOG" 2>&1
-                    echo "" >> "$NVIDIA_SMI_LOG"
+                        # Run DEPO as root
+                        sudo "$DEPO_BIN" "$TEMP_WORKLOAD"
 
-                    # Identify and move result
-                    NEW_FOLDER=$(ls -td "$REPO_DIR"/gpu_experiment_* 2>/dev/null | head -1)
+                        # Log GPU state after each run
+                        TS=$(date '+%Y-%m-%d %H:%M:%S')
+                        if [ "$MULTI_RUN" = true ]; then
+                            echo "=== [$TS] W=${W} T=${T} run=${RUN} ${WORKLOAD_NAME} ==" >> "$NVIDIA_SMI_LOG"
+                        else
+                            echo "=== [$TS] W=${W} T=${T} ${WORKLOAD_NAME} ==" >> "$NVIDIA_SMI_LOG"
+                        fi
+                        sudo nvidia-smi >> "$NVIDIA_SMI_LOG" 2>&1
+                        echo "" >> "$NVIDIA_SMI_LOG"
 
-                    if [ -n "$NEW_FOLDER" ]; then
-                        mv "$NEW_FOLDER" "$FINAL_DEST"
-                        cp "$CONFIG_FILE" "$FINAL_DEST/config_used.yaml"
-                        cp "$NVIDIA_SMI_LOG" "$FINAL_DEST/nvidia_smi_snapshot.txt"
-                    else
-                        echo "ERROR: DEPO did not produce a folder"
-                    fi
+                        # Identify and move result
+                        NEW_FOLDER=$(ls -td "$REPO_DIR"/gpu_experiment_* 2>/dev/null | head -1)
+
+                        if [ -n "$NEW_FOLDER" ]; then
+                            mv "$NEW_FOLDER" "$FINAL_DEST"
+                            cp "$CONFIG_FILE" "$FINAL_DEST/config_used.yaml"
+                            cp "$NVIDIA_SMI_LOG" "$FINAL_DEST/nvidia_smi_snapshot.txt"
+                        else
+                            echo "ERROR: DEPO did not produce a folder"
+                        fi
+                    done
                 done
             done
         done

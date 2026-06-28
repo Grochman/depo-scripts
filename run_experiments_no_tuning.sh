@@ -3,8 +3,11 @@
 # Clean exit on Ctrl+C — also kill any running sudo DEPO child
 trap 'echo "Interrupted. Stopping..."; sudo pkill -f DEPO 2>/dev/null; exit 1' INT TERM
 
-# --- CONFIGURATION ---
-NUM_RUNS=1
+NUM_RUNS=${NUM_RUNS:-5}
+if ! [[ "$NUM_RUNS" =~ ^[0-9]+$ ]]; then
+    echo "Error: NUM_RUNS must be a positive integer."
+    exit 1
+fi
 
 USER_HOME="${HOME}"
 REPO_DIR="$USER_HOME/repos/split"

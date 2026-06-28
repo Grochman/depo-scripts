@@ -1,0 +1,11 @@
+- rebuild depo and torchbench - run both setup scripts
+- check gpu power, if not max set to max (save the old power cap to restore after reservation)
+- simple run (depo targeting run_single_test.sh) to check if depo or torchbench needs rebuild / reconfiguration (profiling_injection/build.sh + symlinc to kernel count)
+- calibrate params for each benchmark on new platform tweaking the run_single_test.sh running it thorugh no tuining mode (modify the run_depo_no_tuning.sh)
+    - check the power consumption - make sure one does max, one does a little bit over min power cap and one is inbetween 
+    - check length of execution - each around 200s
+- modify the run_experiments.sh so it uses the new values
+- cleanup results and restore run_depo to tuining mode
+- run through screen / tmux
+- wait aprox 7.5 days if lenghts set correct 
+- run baseline
